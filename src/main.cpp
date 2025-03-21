@@ -6,7 +6,7 @@
 void handleButton();
 void toggleRelay();
 void toggleFlashing();
-void handleFlashing(int n);
+void handleFlashing(int n, int flashDelay);
 void handleRoot();
 void handleConfig();
 
@@ -23,7 +23,7 @@ bool currentRelayState = relayState;
 // Flashing
 bool flashing = false;
 unsigned int flashNumberConfig = 3; // default flash 3 times
-unsigned long flashDelay = 100; // Default flash delay
+unsigned long flashDelay = 200; // Default flash delay
 unsigned long previousMillis = 0;
 unsigned int flashCount = 0;
 unsigned int flashCounter = 0;
@@ -31,6 +31,7 @@ unsigned int flashNumber = 0;
 
 // Button State
 bool buttonPressed = false;
+bool buttonHolded = false;
 unsigned long buttonPressTime = 0;
 
 // Configuration
@@ -78,23 +79,45 @@ void handleButton() {
     int buttonState = digitalRead(controlPin);
     if (buttonState == LOW && !buttonPressed) {
         buttonPressed = true;
-        buttonPressTime = millis();
-    } else if (buttonState == HIGH && buttonPressed) {
-        buttonPressed = false;
+        if (buttonPressTime == 0){
+            buttonPressTime = millis();
+        }
+    }
+    else if(buttonState == LOW && buttonPressed && !buttonHolded){
         unsigned long pressDuration = millis() - buttonPressTime;
-        if (pressDuration < clickThreshold) {
+        if (pressDuration >= holdThreshold &&  !buttonHolded) {
+            buttonHolded = true;
+            Serial.println("Holded");
             if (clickForOnOff) {
-                toggleRelay();
-            } else {
-                handleFlashing(flashNumber);
-            }
-        } else if (pressDuration >= holdThreshold) {
-            if (clickForOnOff) {
+                Serial.println("Holded flashing");
                 toggleFlashing();
             } else {
+                Serial.println("Holded toggleRelay");
                 toggleRelay();
             }
         }
+    }
+    else if (buttonState == HIGH && buttonHolded){
+        buttonPressed = false;
+        buttonHolded = false;
+        buttonPressTime = 0;
+    }
+    else if (buttonState == HIGH && buttonPressed) {
+        unsigned long pressDuration = millis() - buttonPressTime;
+        Serial.print("Press Duration:");
+        Serial.println(pressDuration);
+        if (pressDuration < clickThreshold) {
+            if (clickForOnOff) {
+                Serial.println("Press toggle");
+                toggleRelay();
+            } else {
+                Serial.println("Press flashing");
+                handleFlashing(flashNumber, flashDelay);
+            }
+        } 
+
+        buttonPressed = false;
+        buttonPressTime = 0;
     }
 }
 
@@ -111,29 +134,44 @@ void toggleFlashing() {
     Serial.println(flashing ? "ON" : "OFF");
 }
 
-void handleFlashing(int num) {
-    if (!flashing) {
-        flashing = true;
-        flashCount = num * 2; // Nhân đôi số lần vì mỗi lần nhấp nháy gồm bật và tắt
-        flashCounter = 0;
-        currentRelayState = relayState; // Lưu trạng thái relay ban đầu
-        previousMillis = millis();
-    }
+// void handleFlashing(int num) {
+//     if (!flashing) {
+//         flashing = true;
+//         flashCount = num * 2; // Nhân đôi số lần vì mỗi lần nhấp nháy gồm bật và tắt
+//         flashCounter = 0;
+//         currentRelayState = relayState; // Lưu trạng thái relay ban đầu
+//         previousMillis = millis();
+//     }
 
-    if (flashing) {
-        unsigned long currentMillis = millis();
-        if (currentMillis - previousMillis >= flashDelay) {
-            previousMillis = currentMillis;
-            relayState = !relayState;
-            digitalWrite(relayPin, relayState);
-            flashCounter++;
-            if (flashCounter >= flashCount) {
-                flashing = false;
-                digitalWrite(relayPin, currentRelayState); // Khôi phục trạng thái ban đầu
-                relayState = currentRelayState;
-            }
-        }
-    }
+//     if (flashing) {
+//         unsigned long currentMillis = millis();
+//         if (currentMillis - previousMillis >= flashDelay) {
+//             previousMillis = currentMillis;
+//             relayState = !relayState;
+//             digitalWrite(relayPin, relayState);
+//             flashCounter++;
+//             if (flashCounter >= flashCount) {
+//                 flashing = false;
+//                 digitalWrite(relayPin, currentRelayState); // Khôi phục trạng thái ban đầu
+//                 relayState = currentRelayState;
+//             }
+//         }
+//     }
+// }
+
+void handleFlashing(int num, int flashDelay) {
+  if (!flashing) {
+      flashing = true;
+      currentRelayState = relayState; // Lưu trạng thái relay ban đầu
+      for (int i = 0; i < num * 2; i++) {
+          relayState = !relayState;
+          digitalWrite(relayPin, relayState);
+          delay(flashDelay);
+      }
+      digitalWrite(relayPin, currentRelayState); // Khôi phục trạng thái ban đầu
+      relayState = currentRelayState;
+      flashing = false;
+  }
 }
 
 void handleRoot() {
