@@ -38,7 +38,7 @@ unsigned long buttonPressTime = 0;
 
 // Configuration
 Preferences preferences;
-bool clickForOnOff = false; // Default: click for on/off, hold for flash
+bool clickForOnOff = true; // Default: click for on/off, hold for flash
 
 // Web Server
 WebServer server(80);
@@ -83,6 +83,9 @@ void handleButton() {
         buttonPressed = true;
         if (buttonPressTime == 0){
             buttonPressTime = millis();
+            if (clickForOnOff) {
+                currentRelayState = relayState; // Lưu trạng thái trước khi hold
+            }
         }
     }
     else if(buttonState == LOW && buttonPressed && !buttonHolded){
@@ -92,7 +95,7 @@ void handleButton() {
             Serial.println("Holded");
             if (clickForOnOff) {
                 Serial.println("Holded flashing");
-                toggleFlashing();
+                handleFlashing(0); // Bắt đầu nháy
             } else {
                 Serial.println("Holded toggleRelay");
                 toggleRelay();
@@ -103,6 +106,11 @@ void handleButton() {
         buttonPressed = false;
         buttonHolded = false;
         buttonPressTime = 0;
+        if (clickForOnOff) {
+            flashing = false; // Dừng nháy
+            digitalWrite(relayPin, currentRelayState); // Khôi phục trạng thái ban đầu
+            relayState = currentRelayState;
+        }
     }
     else if (buttonState == HIGH && buttonPressed && !buttonHolded) {
         unsigned long pressDuration = millis() - buttonPressTime;
@@ -143,7 +151,7 @@ void handleFlashing() {
           relayState = !relayState;
           digitalWrite(relayPin, relayState);
           flashCounter++;
-          if (flashCounter >= flashCount) {
+          if (flashCounter >= flashCount && flashCount > 0) {
               flashing = false;
               digitalWrite(relayPin, currentRelayState);
               relayState = currentRelayState;
